@@ -1,0 +1,30 @@
+# ── Rahasia & Kredensial (JANGAN pernah di-commit!) ───────────────────────────
+.streamlit/secrets.toml
+credentials.json
+*.json
+
+# ── Python ─────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual Environment ────────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+
+# ── IDE & OS ───────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+
+# ── Streamlit cache lokal ──────────────────────────────────────────────────────
+.streamlit/cache/
