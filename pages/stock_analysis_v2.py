@@ -139,11 +139,13 @@ def _run_analysis_v2(penjualan, produk_ref, df_stock, end_date):
         r3_end, r3_start = end_dt - pd.DateOffset(days=60), end_dt - pd.DateOffset(days=89)
 
         def _sales(start, end, col):
-            return (
+            df = (
                 penjualan_90[penjualan_90["Tgl Faktur"].between(start, end)]
                 .groupby(["City", "No. Barang"])["Kuantitas"]
-                .sum().reset_index(name=col)
+                .sum().reset_index()
             )
+            df.rename(columns={"Kuantitas": col}, inplace=True)
+            return df
 
         sales_m1 = _sales(r1_start, r1_end, "Penjualan Bln 1")
         sales_m2 = _sales(r2_start, r2_end, "Penjualan Bln 2")
@@ -159,8 +161,9 @@ def _run_analysis_v2(penjualan, produk_ref, df_stock, end_date):
         wma_grouped = (
             penjualan_90.groupby(["City", "No. Barang"])
             .apply(calculate_daily_wma, end_date=end_date)
-            .reset_index(name="AVG WMA")
+            .reset_index()
         )
+        wma_grouped.rename(columns={wma_grouped.columns[-1]: "AVG WMA"}, inplace=True)
 
         # Kombinasi lengkap City × Barang
         barang_list = produk_ref[["No. Barang", "Kategori Barang", "BRAND Barang", "Nama Barang"]].drop_duplicates()
