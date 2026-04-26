@@ -266,8 +266,10 @@ def _run_wma_analysis(penjualan, produk_ref, df_stock, end_date) -> pd.DataFrame
     r3_end, r3_start = end_dt - pd.DateOffset(days=60), end_dt - pd.DateOffset(days=89)
 
     def _sales(s, e, col):
-        return (penj_90[penj_90["Tgl Faktur"].between(s, e)]
-                .groupby(["City", "No. Barang"])["Kuantitas"].sum().reset_index(name=col))
+        df = (penj_90[penj_90["Tgl Faktur"].between(s, e)]
+              .groupby(["City", "No. Barang"])["Kuantitas"].sum().reset_index())
+        df.rename(columns={"Kuantitas": col}, inplace=True)
+        return df
 
     sales_m1 = _sales(r1_start, r1_end, "Penjualan Bln 1")
     sales_m2 = _sales(r2_start, r2_end, "Penjualan Bln 2")
@@ -278,7 +280,8 @@ def _run_wma_analysis(penjualan, produk_ref, df_stock, end_date) -> pd.DataFrame
 
     wma_grouped = (penj_90.groupby(["City", "No. Barang"])
                    .apply(calculate_daily_wma, end_date=end_date)
-                   .reset_index(name="AVG WMA"))
+                   .reset_index())
+    wma_grouped.rename(columns={wma_grouped.columns[-1]: "AVG WMA"}, inplace=True)
 
     barang_list = produk_ref[["No. Barang", "Kategori Barang", "BRAND Barang", "Nama Barang"]].drop_duplicates()
     city_list   = penjualan["City"].unique() if "City" in penjualan.columns else penj_90["City"].unique()
