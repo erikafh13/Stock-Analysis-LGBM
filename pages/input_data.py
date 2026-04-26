@@ -65,40 +65,18 @@ def render(drive_service):
     # ══════════════════════════════════════════════════════════════════════════
     st.header("1. Data Penjualan / SO")
 
-    # Jika sudah dimuat sebelumnya, langsung tampilkan status tanpa widget input
-    if not st.session_state.get("_penj_drive", pd.DataFrame()).empty or \
-       not st.session_state.get("_penj_manual", pd.DataFrame()).empty:
-        df_drive  = st.session_state.get("_penj_drive",  pd.DataFrame())
-        df_manual = st.session_state.get("_penj_manual", pd.DataFrame())
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Google Drive",  f"{len(df_drive):,} baris"  if not df_drive.empty  else "—")
-        c2.metric("Upload Laptop", f"{len(df_manual):,} baris" if not df_manual.empty else "—")
+    tab_drive, tab_manual = st.tabs(["☁️ Dari Google Drive", "💻 Upload dari Laptop"])
 
-        parts = [d for d in [df_drive, df_manual] if not d.empty]
-        df_gabung = pd.concat(parts, ignore_index=True)
-        if "No. Faktur" in df_gabung.columns and "No. Barang" in df_gabung.columns:
-            df_gabung["No. Faktur"]      = df_gabung["No. Faktur"].astype(str).str.strip()
-            df_gabung["Faktur + Barang"] = df_gabung["No. Faktur"] + df_gabung["No. Barang"].astype(str)
-            df_gabung.drop_duplicates(subset=["Faktur + Barang"], keep="first", inplace=True)
-        c3.metric("Total Gabungan", f"{len(df_gabung):,} baris")
-        st.session_state.df_penjualan = df_gabung
-
-        if "Tgl Faktur" in df_gabung.columns:
-            tmin = df_gabung["Tgl Faktur"].min()
-            tmax = df_gabung["Tgl Faktur"].max()
-            st.success(f"✅ Data aktif: **{tmin.date()}** s/d **{tmax.date()}** "
-                       f"| **{len(df_gabung):,} transaksi**")
-        with st.expander("Preview 20 baris pertama"):
-            st.dataframe(df_gabung.head(20))
-        if st.button("🔄 Reset & Muat Ulang Data Penjualan", key="btn_reset_penj"):
-            for k in ["_penj_drive", "_penj_manual", "df_penjualan", "_cache_penj_files"]:
-                st.session_state.pop(k, None)
-            st.rerun()
-
-    else:
-        tab_drive, tab_manual = st.tabs(["☁️ Dari Google Drive", "💻 Upload dari Laptop"])
-
-        with tab_drive:
+    # ── Tab Google Drive ──────────────────────────────────────────────────────
+    with tab_drive:
+        df_drive = st.session_state.get("_penj_drive", pd.DataFrame())
+        if not df_drive.empty:
+            st.success(f"✅ **{len(df_drive):,} baris** sudah dimuat dari Google Drive.")
+            if st.button("🔄 Muat Ulang dari Drive", key="btn_reload_gdrive"):
+                st.session_state.pop("_penj_drive", None)
+                st.session_state.pop("_cache_penj_files", None)
+                st.rerun()
+        else:
             st.markdown("Semua file penjualan di Google Drive akan **digabungkan otomatis**.")
             if penjualan_files:
                 st.info(f"Ditemukan **{len(penjualan_files)} file** di Google Drive.")
@@ -107,7 +85,6 @@ def render(drive_service):
                         st.text(f"• {f['name']}")
             else:
                 st.warning("⚠️ Tidak ada file di folder Google Drive.")
-
             if st.button("☁️ Muat dari Google Drive", key="btn_gdrive"):
                 if penjualan_files:
                     with st.spinner("Mengunduh dan menggabungkan..."):
@@ -116,15 +93,21 @@ def render(drive_service):
                         dfs = [_normalize_penjualan(d) for d in dfs if not d.empty]
                     if dfs:
                         st.session_state["_penj_drive"] = pd.concat(dfs, ignore_index=True)
-                        st.success(f"✅ {len(dfs)} file dimuat "
-                                   f"({len(st.session_state['_penj_drive']):,} baris).")
                         st.rerun()
                     else:
                         st.error("Gagal memuat data.")
                 else:
                     st.warning("Tidak ada file di Google Drive.")
 
-        with tab_manual:
+    # ── Tab Upload Laptop ─────────────────────────────────────────────────────
+    with tab_manual:
+        df_manual = st.session_state.get("_penj_manual", pd.DataFrame())
+        if not df_manual.empty:
+            st.success(f"✅ **{len(df_manual):,} baris** sudah dimuat dari laptop.")
+            if st.button("🔄 Muat Ulang dari Laptop", key="btn_reload_manual"):
+                st.session_state.pop("_penj_manual", None)
+                st.rerun()
+        else:
             st.markdown("""
             Upload satu atau beberapa file penjualan dari laptop. Format kolom harus sama
             dengan file Google Drive: `No. Faktur`, `Tgl Faktur`, `No. Barang`,
@@ -148,6 +131,42 @@ def render(drive_service):
                 if parts:
                     st.session_state["_penj_manual"] = pd.concat(parts, ignore_index=True)
                     st.rerun()
+
+    # ── Gabungkan & tampilkan status ──────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("🔗 Status Penggabungan Data Penjualan")
+
+    df_drive  = st.session_state.get("_penj_drive",  pd.DataFrame())
+    df_manual = st.session_state.get("_penj_manual", pd.DataFrame())
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Google Drive",  f"{len(df_drive):,} baris"  if not df_drive.empty  else "Belum dimuat")
+    c2.metric("Upload Laptop", f"{len(df_manual):,} baris" if not df_manual.empty else "Belum ada")
+
+    parts = [d for d in [df_drive, df_manual] if not d.empty]
+    if parts:
+        df_gabung = pd.concat(parts, ignore_index=True)
+        if "No. Faktur" in df_gabung.columns and "No. Barang" in df_gabung.columns:
+            df_gabung["No. Faktur"]      = df_gabung["No. Faktur"].astype(str).str.strip()
+            df_gabung["Faktur + Barang"] = df_gabung["No. Faktur"] + df_gabung["No. Barang"].astype(str)
+            n_before = len(df_gabung)
+            df_gabung.drop_duplicates(subset=["Faktur + Barang"], keep="first", inplace=True)
+            n_dup = n_before - len(df_gabung)
+            if n_dup:
+                st.info(f"ℹ️ {n_dup:,} baris duplikat dihapus saat penggabungan.")
+        c3.metric("Total Gabungan", f"{len(df_gabung):,} baris")
+        st.session_state.df_penjualan = df_gabung
+
+        if "Tgl Faktur" in df_gabung.columns:
+            tmin = df_gabung["Tgl Faktur"].min()
+            tmax = df_gabung["Tgl Faktur"].max()
+            st.success(f"✅ Data aktif: **{tmin.date()}** s/d **{tmax.date()}** "
+                       f"| **{len(df_gabung):,} transaksi**")
+        with st.expander("Preview 20 baris pertama"):
+            st.dataframe(df_gabung.head(20))
+    else:
+        c3.metric("Total Gabungan", "0 baris")
+        st.warning("⚠️ Belum ada data penjualan. Muat dari Google Drive atau upload dari laptop.")
 
     # ══════════════════════════════════════════════════════════════════════════
     # 2. PRODUK REFERENSI
