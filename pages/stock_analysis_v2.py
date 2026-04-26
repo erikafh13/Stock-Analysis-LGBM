@@ -158,12 +158,17 @@ def _run_analysis_v2(penjualan, produk_ref, df_stock, end_date):
         total_90["AVG Mean"] = total_90["Kuantitas"] / 3
         total_90.drop("Kuantitas", axis=1, inplace=True)
 
-        wma_grouped = (
-            penjualan_90.groupby(["City", "No. Barang"])
-            .apply(calculate_daily_wma, end_date=end_date)
-            .reset_index()
-        )
-        wma_grouped.rename(columns={wma_grouped.columns[-1]: "AVG WMA"}, inplace=True)
+        _grp = ["City", "No. Barang"]
+        _end = pd.to_datetime(end_date)
+        _r1s = _end - pd.DateOffset(days=29)
+        _r2s, _r2e = _end - pd.DateOffset(days=59), _end - pd.DateOffset(days=30)
+        _r3s, _r3e = _end - pd.DateOffset(days=89), _end - pd.DateOffset(days=60)
+        _s1 = penjualan_90[penjualan_90["Tgl Faktur"].between(_r1s, _end)].groupby(_grp)["Kuantitas"].sum().rename("s1").reset_index()
+        _s2 = penjualan_90[penjualan_90["Tgl Faktur"].between(_r2s, _r2e)].groupby(_grp)["Kuantitas"].sum().rename("s2").reset_index()
+        _s3 = penjualan_90[penjualan_90["Tgl Faktur"].between(_r3s, _r3e)].groupby(_grp)["Kuantitas"].sum().rename("s3").reset_index()
+        wma_grouped = _s1.merge(_s2, on=_grp, how="outer").merge(_s3, on=_grp, how="outer").fillna(0)
+        wma_grouped["AVG WMA"] = (wma_grouped["s1"]*0.5 + wma_grouped["s2"]*0.3 + wma_grouped["s3"]*0.2).apply(math.ceil)
+        wma_grouped.drop(columns=["s1","s2","s3"], inplace=True)
 
         # Kombinasi lengkap City × Barang
         barang_list = produk_ref[["No. Barang", "Kategori Barang", "BRAND Barang", "Nama Barang"]].drop_duplicates()
