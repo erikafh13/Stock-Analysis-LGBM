@@ -12,7 +12,6 @@ from utils import (
     download_and_read,
     read_produk_file,
     read_stock_file,
-    convert_df_to_excel,
     FOLDER_PENJUALAN,
     FOLDER_PRODUK,
     FOLDER_STOCK,
@@ -30,68 +29,12 @@ def _read_uploaded_file(uploaded_file) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def _is_local_format(df: pd.DataFrame) -> bool:
-    """Deteksi apakah file adalah format lokal (bukan Drive)."""
-    local_indicators = {"Nama Dept.", "Kuantitas", "Nama Kategori Barang Barang", "Keterangan Barang"}
-    return bool(local_indicators & set(df.columns))
-
-
-def _clean_local_format(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Cleaning data lokal agar kolom-kolomnya sesuai format Drive.
-
-    Pemetaan:
-        Kuantitas                    → Qty
-        Keterangan Barang            → Nama Barang
-        Nama Kategori Barang Barang  → Kategori
-        Nama Dept.                   → Dept.  (ekstrak huruf prefix: 'F - Mlg' → 'F')
-
-    Kolom lokal yang tidak dipakai di-drop:
-        Bulan, City, Category, Market Place
-    """
-    df = df.copy()
-
-    # Rename kolom utama
-    rename_map = {
-        "Kuantitas":                    "Qty",
-        "Keterangan Barang":            "Nama Barang",
-        "Nama Kategori Barang Barang":  "Kategori",
-    }
-    df.rename(columns=rename_map, inplace=True, errors="ignore")
-
-    # Ekstrak prefix huruf dari 'Nama Dept.' → 'Dept.'
-    if "Nama Dept." in df.columns:
-        df["Dept."] = (
-            df["Nama Dept."]
-            .astype(str)
-            .str.strip()
-            .str[0]
-            .str.upper()
-            .where(df["Nama Dept."].astype(str).str.strip().str[0].str.isalpha(), other="X")
-        )
-        df.drop(columns=["Nama Dept."], inplace=True)
-
-    # Drop kolom lokal yang akan digenerate ulang oleh stock_analysis.py
-    df.drop(columns=["Bulan", "City", "Category", "Market Place"],
-            inplace=True, errors="ignore")
-
-    # Kolom drive yang tidak ada di lokal → isi NaN
-    for col in ["Sales", "Gudang", "Harga Sat", "Lokasi Toko Pelanggan"]:
-        if col not in df.columns:
-            df[col] = pd.NA
-
-    return df
-
-
 def _normalize_penjualan(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    # Cleaning khusus jika format lokal
-    if _is_local_format(df):
-        df = _clean_local_format(df)
     if "No. Barang" in df.columns:
         df["No. Barang"] = df["No. Barang"].astype(str).str.strip()
     if "Tgl Faktur" in df.columns:
-        df["Tgl Faktur"] = pd.to_datetime(df["Tgl Faktur"], dayfirst=True, errors="coerce")
+        df["Tgl Faktur"] = pd.to_datetime(df["Tgl Faktur"], errors="coerce")
     return df
 
 
@@ -139,12 +82,9 @@ def render(drive_service):
 
     with tab_manual:
         st.markdown("""
-        Upload satu atau beberapa file penjualan dari laptop.
-
-        **Format Drive** (langsung dipakai): `No. Faktur`, `Tgl Faktur`, `No. Barang`, `Qty`, `Dept.`, `Nama Pelanggan`
-
-        **Format Lokal** (otomatis di-cleaning): `No. Faktur`, `Tgl Faktur`, `No. Barang`,
-        `Kuantitas`, `Nama Dept.`, `Keterangan Barang`, `Nama Kategori Barang Barang`, `Nama Pelanggan`
+        Upload satu atau beberapa file penjualan dari laptop. Format kolom harus sama
+        dengan file Google Drive: `No. Faktur`, `Tgl Faktur`, `No. Barang`,
+        `Qty` / `Kuantitas`, `Dept.`, `Nama Pelanggan`.
         """)
         uploaded = st.file_uploader(
             "Pilih file penjualan (.xlsx / .csv) — bisa lebih dari satu",
@@ -199,12 +139,6 @@ def render(drive_service):
         with st.expander("Preview 20 baris pertama"):
             st.dataframe(df_gabung.head(20))
 
-        st.download_button(
-            "📥 Unduh Data Gabungan (.xlsx)",
-            data=convert_df_to_excel(df_gabung),
-            file_name="data_penjualan_gabungan.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
     else:
         c3.metric("Total Gabungan", "0 baris")
         st.warning("⚠️ Belum ada data penjualan. Muat dari Google Drive atau upload dari laptop.")
